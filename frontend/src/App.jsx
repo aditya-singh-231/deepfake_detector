@@ -40,6 +40,54 @@ const IconScan = () => (
     <line x1="3" y1="12" x2="21" y2="12"/>
   </svg>
 );
+const IconInfo = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{width:"100%",height:"100%"}}>
+    <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+  </svg>
+);
+
+// ── Video playability detection ───────────────────────────────────────────────
+const getExt = (name) => name.slice(name.lastIndexOf(".")).toLowerCase();
+
+// Extensions that always need server-side conversion (browser never supports them)
+const ALWAYS_CONVERT = new Set([".avi", ".mkv", ".flv", ".wmv", ".3gp", ".mov"]);
+
+/**
+ * Probe whether the browser can actually decode this file.
+ * Returns a Promise<boolean>.
+ *
+ * Strategy:
+ *  1. If extension is in ALWAYS_CONVERT → false immediately (no probe needed)
+ *  2. Otherwise create an <video> element, attach the blob as src,
+ *     and listen for canplay vs error events.
+ *     This catches H.265 mp4, MPEG-4 Part 2, ProRes, etc.
+ */
+const probeCanPlay = (file) => {
+  const ext = getExt(file.name);
+  if (ALWAYS_CONVERT.has(ext)) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.muted = true;
+    video.preload = "metadata";
+
+    const cleanup = (result) => {
+      video.src = "";
+      URL.revokeObjectURL(url);
+      resolve(result);
+    };
+
+    // Give it 3 seconds max — some codecs stall instead of erroring
+    const timer = setTimeout(() => cleanup(false), 3000);
+
+    video.oncanplay = () => { clearTimeout(timer); cleanup(true); };
+    video.onerror   = () => { clearTimeout(timer); cleanup(false); };
+
+    video.src = url;
+    video.load();
+  });
+};
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = {
@@ -68,73 +116,47 @@ const styles = {
     maxWidth: 680, margin: "0 auto",
     padding: "24px 16px 80px",
   },
-  header: {
-    textAlign: "center", marginBottom: 40, paddingTop: 20,
-  },
+  header: { textAlign: "center", marginBottom: 40, paddingTop: 20 },
   badge: {
     display: "inline-flex", alignItems: "center", gap: 8,
     background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)",
     borderRadius: 4, padding: "4px 12px", marginBottom: 20,
-    fontSize: 11, letterSpacing: "0.15em", color: "#10b981",
-    textTransform: "uppercase",
+    fontSize: 11, letterSpacing: "0.15em", color: "#10b981", textTransform: "uppercase",
   },
-  dot: {
-    width: 6, height: 6, borderRadius: "50%", background: "#10b981",
-    animation: "pulse 2s infinite",
-  },
+  dot: { width: 6, height: 6, borderRadius: "50%", background: "#10b981", animation: "pulse 2s infinite" },
   title: {
-    fontSize: "clamp(28px, 7vw, 52px)",
-    fontWeight: 700, lineHeight: 1.1,
-    letterSpacing: "-0.03em",
-    color: "#f8fafc",
-    marginBottom: 12,
+    fontSize: "clamp(28px, 7vw, 52px)", fontWeight: 700, lineHeight: 1.1,
+    letterSpacing: "-0.03em", color: "#f8fafc", marginBottom: 12,
     fontFamily: "'Space Grotesk', 'DM Mono', sans-serif",
   },
   titleAccent: { color: "#10b981" },
-  subtitle: {
-    color: "#64748b", fontSize: 14, lineHeight: 1.6,
-    maxWidth: 420, margin: "0 auto",
-  },
+  subtitle: { color: "#64748b", fontSize: 14, lineHeight: 1.6, maxWidth: 420, margin: "0 auto" },
   dropzone: (drag) => ({
     border: `2px dashed ${drag ? "#10b981" : "rgba(100,116,139,0.3)"}`,
-    borderRadius: 12,
-    padding: "48px 24px",
-    textAlign: "center",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
+    borderRadius: 12, padding: "48px 24px", textAlign: "center",
+    cursor: "pointer", transition: "all 0.2s ease",
     background: drag ? "rgba(16,185,129,0.05)" : "rgba(15,23,42,0.6)",
-    backdropFilter: "blur(8px)",
-    position: "relative",
-    marginBottom: 24,
+    backdropFilter: "blur(8px)", position: "relative", marginBottom: 24,
   }),
-  dropIcon: {
-    width: 48, height: 48, margin: "0 auto 16px",
-    color: "#10b981", opacity: 0.8,
-  },
+  dropIcon: { width: 48, height: 48, margin: "0 auto 16px", color: "#10b981", opacity: 0.8 },
   dropTitle: { fontSize: 16, fontWeight: 600, color: "#cbd5e1", marginBottom: 8 },
   dropSub: { fontSize: 13, color: "#475569" },
-  fileTypes: {
-    display: "flex", gap: 8, justifyContent: "center", marginTop: 16, flexWrap: "wrap",
-  },
-  tag: {
-    background: "rgba(30,41,59,0.8)", border: "1px solid rgba(71,85,105,0.4)",
+  fileTypes: { display: "flex", gap: 8, justifyContent: "center", marginTop: 16, flexWrap: "wrap" },
+  tag: (supported) => ({
+    background: supported ? "rgba(16,185,129,0.08)" : "rgba(30,41,59,0.8)",
+    border: `1px solid ${supported ? "rgba(16,185,129,0.25)" : "rgba(71,85,105,0.4)"}`,
     borderRadius: 4, padding: "3px 10px", fontSize: 11,
-    color: "#64748b", letterSpacing: "0.05em",
-  },
+    color: supported ? "#10b981" : "#64748b", letterSpacing: "0.05em",
+  }),
   preview: {
     borderRadius: 12, overflow: "hidden",
     border: "1px solid rgba(71,85,105,0.3)",
-    background: "rgba(15,23,42,0.8)",
-    marginBottom: 24, position: "relative",
+    background: "rgba(15,23,42,0.8)", marginBottom: 24, position: "relative",
   },
-  previewImg: {
-    width: "100%", display: "block", maxHeight: 320, objectFit: "contain",
-    background: "#0f172a",
-  },
+  previewImg: { width: "100%", display: "block", maxHeight: 320, objectFit: "contain", background: "#0f172a" },
   previewBar: {
     display: "flex", alignItems: "center", justifyContent: "space-between",
-    padding: "10px 16px",
-    borderTop: "1px solid rgba(71,85,105,0.2)",
+    padding: "10px 16px", borderTop: "1px solid rgba(71,85,105,0.2)",
     fontSize: 12, color: "#64748b",
   },
   previewIcon: { width: 14, height: 14, marginRight: 6, color: "#10b981", display:"inline-block", verticalAlign:"middle" },
@@ -142,8 +164,20 @@ const styles = {
     width: 28, height: 28, borderRadius: "50%",
     background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)",
     color: "#ef4444", cursor: "pointer", display: "flex",
-    alignItems: "center", justifyContent: "center", padding: 6,
-    transition: "all 0.15s",
+    alignItems: "center", justifyContent: "center", padding: 6, transition: "all 0.15s",
+  },
+  // Format warning banner
+  formatWarning: {
+    background: "rgba(245,158,11,0.08)", border: "1px solid rgba(245,158,11,0.3)",
+    borderRadius: 10, padding: "12px 16px", marginBottom: 16,
+    display: "flex", gap: 10, alignItems: "flex-start", fontSize: 12,
+  },
+  formatWarningIcon: { width: 16, height: 16, color: "#f59e0b", flexShrink: 0, marginTop: 1 },
+  // Converting banner
+  convertingBanner: {
+    background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.2)",
+    borderRadius: 10, padding: "12px 16px", marginBottom: 16,
+    display: "flex", gap: 10, alignItems: "center", fontSize: 12, color: "#10b981",
   },
   analyzeBtn: (loading) => ({
     width: "100%", padding: "16px 24px",
@@ -151,20 +185,15 @@ const styles = {
     border: loading ? "1px solid rgba(16,185,129,0.3)" : "none",
     borderRadius: 10, color: loading ? "#10b981" : "#030712",
     fontSize: 14, fontWeight: 700, letterSpacing: "0.08em",
-    cursor: loading ? "not-allowed" : "pointer",
-    transition: "all 0.2s ease",
+    cursor: loading ? "not-allowed" : "pointer", transition: "all 0.2s ease",
     display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
-    textTransform: "uppercase",
-    fontFamily: "inherit",
+    textTransform: "uppercase", fontFamily: "inherit",
   }),
   spinner: {
     width: 16, height: 16, border: "2px solid rgba(16,185,129,0.3)",
-    borderTopColor: "#10b981", borderRadius: "50%",
-    animation: "spin 0.8s linear infinite",
+    borderTopColor: "#10b981", borderRadius: "50%", animation: "spin 0.8s linear infinite",
   },
   scanIcon: { width: 18, height: 18, display:"inline-flex" },
-
-  // Results
   result: (fake) => ({
     borderRadius: 12, overflow: "hidden",
     border: `1px solid ${fake ? "rgba(239,68,68,0.4)" : "rgba(16,185,129,0.4)"}`,
@@ -177,15 +206,10 @@ const styles = {
     display: "flex", alignItems: "center", justifyContent: "space-between",
     flexWrap: "wrap", gap: 12,
   }),
-  resultLabel: (fake) => ({
-    display: "flex", alignItems: "center", gap: 12,
-  }),
   resultIcon: { width: 40, height: 40 },
   verdict: (fake) => ({
-    fontSize: "clamp(20px, 5vw, 28px)",
-    fontWeight: 800, letterSpacing: "-0.02em",
-    color: fake ? "#ef4444" : "#10b981",
-    fontFamily: "'Space Grotesk', sans-serif",
+    fontSize: "clamp(20px, 5vw, 28px)", fontWeight: 800, letterSpacing: "-0.02em",
+    color: fake ? "#ef4444" : "#10b981", fontFamily: "'Space Grotesk', sans-serif",
   }),
   verdictSub: { fontSize: 12, color: "#64748b", marginTop: 2 },
   confidenceBadge: (fake) => ({
@@ -194,70 +218,44 @@ const styles = {
     borderRadius: 8, padding: "8px 16px", textAlign: "center",
   }),
   confNum: (fake) => ({
-    fontSize: 28, fontWeight: 800,
-    color: fake ? "#ef4444" : "#10b981",
-    fontFamily: "'Space Grotesk', sans-serif",
-    lineHeight: 1,
+    fontSize: 28, fontWeight: 800, color: fake ? "#ef4444" : "#10b981",
+    fontFamily: "'Space Grotesk', sans-serif", lineHeight: 1,
   }),
   confLabel: { fontSize: 10, color: "#64748b", letterSpacing: "0.1em", textTransform: "uppercase", marginTop: 2 },
-
-  // Meter
   meterWrap: { padding: "20px 24px" },
   meterLabel: { display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 12, color: "#64748b" },
-  meterTrack: {
-    height: 8, borderRadius: 4,
-    background: "rgba(30,41,59,0.8)", overflow: "hidden", position: "relative",
-  },
+  meterTrack: { height: 8, borderRadius: 4, background: "rgba(30,41,59,0.8)", overflow: "hidden" },
   meterFill: (pct, fake) => ({
     height: "100%", width: `${pct}%`,
-    background: fake
-      ? "linear-gradient(90deg, #dc2626, #ef4444)"
-      : "linear-gradient(90deg, #059669, #10b981)",
+    background: fake ? "linear-gradient(90deg, #dc2626, #ef4444)" : "linear-gradient(90deg, #059669, #10b981)",
     borderRadius: 4, transition: "width 1s ease",
   }),
-
-  // Stats grid
   stats: {
-    display: "grid", gridTemplateColumns: "1fr 1fr",
-    gap: 1, background: "rgba(71,85,105,0.1)",
-    borderTop: "1px solid rgba(71,85,105,0.15)",
+    display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1,
+    background: "rgba(71,85,105,0.1)", borderTop: "1px solid rgba(71,85,105,0.15)",
   },
-  statCell: {
-    padding: "14px 20px",
-    background: "rgba(15,23,42,0.6)",
-  },
+  statCell: { padding: "14px 20px", background: "rgba(15,23,42,0.6)" },
   statVal: { fontSize: 18, fontWeight: 700, color: "#e2e8f0", fontFamily: "'Space Grotesk', sans-serif" },
   statKey: { fontSize: 11, color: "#475569", marginTop: 2, letterSpacing: "0.05em" },
-
-  // Features
   features: { padding: "16px 24px", borderTop: "1px solid rgba(71,85,105,0.15)" },
   featTitle: { fontSize: 11, color: "#475569", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 12 },
   featGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 },
   featRow: {
-    display: "flex", flexDirection: "column", gap: 4,
-    padding: "10px 12px",
-    background: "rgba(15,23,42,0.6)", borderRadius: 6,
-    border: "1px solid rgba(71,85,105,0.15)",
+    display: "flex", flexDirection: "column", gap: 4, padding: "10px 12px",
+    background: "rgba(15,23,42,0.6)", borderRadius: 6, border: "1px solid rgba(71,85,105,0.15)",
   },
   featName: { fontSize: 11, color: "#64748b" },
   featVal: { fontSize: 14, fontWeight: 600, color: "#cbd5e1", fontFamily: "'Space Grotesk', sans-serif" },
-  featBar: (pct) => ({
-    height: 3, background: "rgba(30,41,59,0.8)", borderRadius: 2, overflow: "hidden", marginTop: 2,
-  }),
+  featBarTrack: { height: 3, background: "rgba(30,41,59,0.8)", borderRadius: 2, overflow: "hidden", marginTop: 2 },
   featBarFill: (pct) => ({
     height: "100%", width: `${Math.min(100, pct)}%`,
     background: "rgba(16,185,129,0.5)", borderRadius: 2, transition: "width 0.8s ease",
   }),
-
-  // meta
   metaRow: {
-    padding: "12px 24px",
-    borderTop: "1px solid rgba(71,85,105,0.1)",
+    padding: "12px 24px", borderTop: "1px solid rgba(71,85,105,0.1)",
     display: "flex", justifyContent: "space-between", flexWrap: "wrap",
     gap: 8, fontSize: 11, color: "#334155",
   },
-
-  // Error
   error: {
     background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.3)",
     borderRadius: 10, padding: "16px 20px", marginTop: 20,
@@ -266,18 +264,13 @@ const styles = {
   errorIcon: { width: 18, height: 18, flexShrink: 0, marginTop: 1 },
 };
 
-// ── Keyframe injector ─────────────────────────────────────────────────────────
 const Keyframes = () => (
   <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
     @keyframes spin  { to{transform:rotate(360deg)} }
     @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
-    @keyframes scan  {
-      0%  { top: 0; opacity: 0.8; }
-      50% { opacity: 1; }
-      100%{ top: 100%; opacity: 0; }
-    }
+    @keyframes scan  { 0%{top:0;opacity:0.8} 50%{opacity:1} 100%{top:100%;opacity:0} }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: #030712; }
     input[type=file] { display:none; }
@@ -288,22 +281,26 @@ const Keyframes = () => (
   `}</style>
 );
 
-// ── Progress display during analysis ─────────────────────────────────────────
 const steps = ["Uploading media", "Extracting frames", "Analysing artifacts", "Computing score"];
-const ProgressSteps = ({ step }) => (
+const ProgressSteps = ({ step, isConverting }) => (
   <div style={{ padding: "24px", textAlign: "center" }}>
+    {isConverting && (
+      <div style={{ fontSize: 12, color: "#f59e0b", marginBottom: 16, padding: "8px 12px", background: "rgba(245,158,11,0.08)", borderRadius: 6 }}>
+        ⚙ Converting video to mp4 for analysis…
+      </div>
+    )}
     {steps.map((s, i) => {
       const done = i < step;
       const active = i === step;
       return (
-        <div key={s} style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12, opacity: done ? 0.4 : active ? 1 : 0.2, transition: "opacity 0.3s" }}>
+        <div key={s} style={{ display:"flex", alignItems:"center", gap:12, marginBottom:12, opacity: done ? 0.4 : active ? 1 : 0.2, transition:"opacity 0.3s" }}>
           <div style={{
-            width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
-            background: done ? "#10b981" : active ? "#10b981" : "#1e293b",
+            width:8, height:8, borderRadius:"50%", flexShrink:0,
+            background: done||active ? "#10b981" : "#1e293b",
             boxShadow: active ? "0 0 8px #10b981" : "none",
             animation: active ? "pulse 1s infinite" : "none",
           }} />
-          <span style={{ fontSize: 13, color: done ? "#334155" : active ? "#10b981" : "#1e293b", fontFamily: "inherit" }}>
+          <span style={{ fontSize:13, color: done ? "#334155" : active ? "#10b981" : "#1e293b", fontFamily:"inherit" }}>
             {done ? "✓ " : ""}{s}{active ? "..." : ""}
           </span>
         </div>
@@ -312,12 +309,36 @@ const ProgressSteps = ({ step }) => (
   </div>
 );
 
-// ── Main App ──────────────────────────────────────────────────────────────────
+// ── Unsupported format placeholder ────────────────────────────────────────────
+const VideoPlaceholder = ({ filename, probing }) => (
+  <div style={{
+    width: "100%", height: 200, display: "flex", flexDirection: "column",
+    alignItems: "center", justifyContent: "center", gap: 10,
+    background: "#0a1628", color: "#475569",
+  }}>
+    {probing
+      ? <div style={{ display:"flex", alignItems:"center", gap:10, color:"#10b981" }}>
+          <div style={{ width:16, height:16, border:"2px solid rgba(16,185,129,0.3)", borderTopColor:"#10b981", borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />
+          <span style={{ fontSize:13 }}>Checking codec compatibility…</span>
+        </div>
+      : <>
+          <div style={{ width: 40, height: 40, opacity: 0.4 }}><IconFilm /></div>
+          <div style={{ fontSize: 13 }}>{filename}</div>
+          <div style={{ fontSize: 11, color: "#334155" }}>
+            Codec not supported by browser — will be converted by server
+          </div>
+        </>
+    }
+  </div>
+);
+
 export default function App() {
   const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [preview, setPreview] = useState(null);          // { url, type, canPlay, ext }
+  const [convertedUrl, setConvertedUrl] = useState(null); // server-side converted mp4 URL
   const [drag, setDrag] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [isConverting, setIsConverting] = useState(false);
   const [progressStep, setProgressStep] = useState(0);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -325,13 +346,28 @@ export default function App() {
 
   const API = "http://localhost:5000";
 
-  const handleFile = useCallback((f) => {
+  const handleFile = useCallback(async (f) => {
     if (!f) return;
     setFile(f);
     setResult(null);
     setError(null);
-    const url = URL.createObjectURL(f);
-    setPreview({ url, type: f.type.startsWith("video") ? "video" : "image" });
+    setIsConverting(false);
+
+    const isVideo = f.type.startsWith("video") || /\.(avi|mov|mkv|flv|wmv|3gp|mp4|webm)$/i.test(f.name);
+    const ext = getExt(f.name);
+
+    if (!isVideo) {
+      const url = URL.createObjectURL(f);
+      setPreview({ url, type: "image", canPlay: true, ext });
+      return;
+    }
+
+    // Show a loading state while we probe
+    setPreview({ url: null, type: "video", canPlay: null, ext });   // null = probing
+
+    const playable = await probeCanPlay(f);
+    const url = playable ? URL.createObjectURL(f) : null;
+    setPreview({ url, type: "video", canPlay: playable, ext });
   }, []);
 
   const onDrop = useCallback((e) => {
@@ -346,9 +382,14 @@ export default function App() {
     if (!file || loading) return;
     setLoading(true); setResult(null); setError(null); setProgressStep(0);
 
+    // If video needs conversion, signal it
+    if (preview?.type === "video" && !preview?.canPlay) {
+      setIsConverting(true);
+    }
+
     const stepInterval = setInterval(() => {
       setProgressStep(p => Math.min(p + 1, 3));
-    }, 700);
+    }, 900);
 
     try {
       const fd = new FormData();
@@ -356,24 +397,41 @@ export default function App() {
       const res = await fetch(`${API}/analyze`, { method: "POST", body: fd });
       clearInterval(stepInterval);
       setProgressStep(4);
+      setIsConverting(false);
+
       if (!res.ok) {
         const d = await res.json();
         throw new Error(d.error || "Server error");
       }
       const data = await res.json();
-      await new Promise(r => setTimeout(r, 400));
+
+      // Backend always returns preview_url for videos now (converted or remuxed)
+      // This replaces the placeholder regardless of whether conversion was needed
+      if (data.preview_url) {
+        setConvertedUrl(data.preview_url);
+        // Also update preview canPlay so the warning banner disappears
+        setPreview(p => p ? { ...p, canPlay: true } : p);
+      }
+
+      await new Promise(r => setTimeout(r, 300));
       setResult(data);
     } catch (err) {
       clearInterval(stepInterval);
+      setIsConverting(false);
       setError(err.message || "Connection failed. Make sure the Flask server is running on port 5000.");
     } finally {
       setLoading(false);
     }
   };
 
-  const clearAll = () => { setFile(null); setPreview(null); setResult(null); setError(null); setProgressStep(0); };
+  const clearAll = () => {
+    setFile(null); setPreview(null); setResult(null);
+    setError(null); setProgressStep(0); setIsConverting(false);
+    setConvertedUrl(null);
+  };
 
   const fake = result?.label === "FAKE";
+  const showFormatWarning = preview?.type === "video" && preview?.canPlay === false && !result;
 
   return (
     <>
@@ -381,8 +439,8 @@ export default function App() {
       <div style={styles.root}>
         <div style={styles.grid} />
         <div style={styles.noise} />
-
         <div style={styles.container}>
+
           {/* Header */}
           <header style={styles.header}>
             <div style={styles.badge}>
@@ -406,23 +464,35 @@ export default function App() {
               onDrop={onDrop}
               onClick={() => fileInputRef.current.click()}
             >
-              {/* Scan line animation */}
               {drag && (
                 <div style={{
-                  position: "absolute", left: 0, right: 0, height: 2,
-                  background: "linear-gradient(90deg, transparent, #10b981, transparent)",
-                  animation: "scan 1s linear infinite", top: 0,
+                  position:"absolute", left:0, right:0, height:2,
+                  background:"linear-gradient(90deg, transparent, #10b981, transparent)",
+                  animation:"scan 1s linear infinite", top:0,
                 }} />
               )}
               <div style={styles.dropIcon}><IconUpload /></div>
               <div style={styles.dropTitle}>Drop media here or click to browse</div>
-              <div style={styles.dropSub}>Analyse images and videos for deepfake artifacts</div>
+              <div style={styles.dropSub}>Supports images and videos in all common formats</div>
               <div style={styles.fileTypes}>
-                {["JPG", "PNG", "WEBP", "MP4", "MOV", "AVI"].map(t => (
-                  <span key={t} style={styles.tag}>{t}</span>
-                ))}
+                {["JPG","PNG","WEBP"].map(t => <span key={t} style={styles.tag(true)}>{t}</span>)}
+                {["MP4","WEBM"].map(t => <span key={t} style={styles.tag(true)}>{t} ✓</span>)}
+                {["MOV","AVI","MKV"].map(t => <span key={t} style={styles.tag(false)}>{t} →ffmpeg</span>)}
               </div>
               <input ref={fileInputRef} type="file" accept="image/*,video/*" onChange={onInputChange} />
+            </div>
+          )}
+
+          {/* Format warning for unsupported video */}
+          {showFormatWarning && (
+            <div style={styles.formatWarning}>
+              <div style={styles.formatWarningIcon}><IconWarning /></div>
+              <div style={{ color: "#fbbf24" }}>
+                <strong>{preview.ext.toUpperCase()} file</strong> — the codec inside this video is not supported by your browser
+                {" "}(common with H.265/HEVC, ProRes, or camera-recorded MP4s).
+                {" "}The video will still be <strong>analysed correctly</strong> by the backend.
+                {" "}Install <strong>ffmpeg</strong> on the server for automatic conversion to a playable format.
+              </div>
             </div>
           )}
 
@@ -431,16 +501,28 @@ export default function App() {
             <div style={styles.preview}>
               {preview.type === "image"
                 ? <img src={preview.url} alt="preview" style={styles.previewImg} />
-                : <video src={preview.url} controls style={{ ...styles.previewImg, maxHeight: 280 }} />
+                : convertedUrl
+                  ? /* Conversion done — play the server-converted mp4 */
+                    <div style={{position:"relative"}}>
+                      <video key={convertedUrl} src={convertedUrl} controls style={{ ...styles.previewImg, maxHeight: 280 }} />
+                      <div style={{position:"absolute",top:8,left:8,background:"rgba(16,185,129,0.9)",color:"#030712",fontSize:10,fontWeight:700,padding:"3px 8px",borderRadius:4,letterSpacing:"0.08em"}}>
+                        ✓ CONVERTED TO MP4
+                      </div>
+                    </div>
+                  : preview.canPlay === null
+                    ? <VideoPlaceholder filename={file?.name} probing={true} />
+                    : preview.canPlay
+                      ? <video key={preview.url} src={preview.url} controls style={{ ...styles.previewImg, maxHeight: 280 }} />
+                      : <VideoPlaceholder filename={file?.name} probing={false} />
               }
               <div style={styles.previewBar}>
-                <div style={{ display: "flex", alignItems: "center" }}>
+                <div style={{ display:"flex", alignItems:"center" }}>
                   <span style={styles.previewIcon}>
                     {preview.type === "video" ? <IconFilm /> : <IconShield />}
                   </span>
-                  <span style={{ fontSize: 12, color: "#64748b" }}>{file?.name}</span>
-                  <span style={{ marginLeft: 8, color: "#334155" }}>
-                    ({(file?.size / 1024 / 1024).toFixed(2)} MB)
+                  <span style={{ fontSize:12, color:"#64748b" }}>{file?.name}</span>
+                  <span style={{ marginLeft:8, color:"#334155" }}>
+                    ({(file?.size/1024/1024).toFixed(2)} MB)
                   </span>
                 </div>
                 <button style={styles.clearBtn} onClick={clearAll} title="Remove">
@@ -450,8 +532,10 @@ export default function App() {
             </div>
           )}
 
+          {/* Converted video is now shown inline in the preview box above */}
+
           {/* Analyse button */}
-          {file && !loading && (
+          {file && !loading && preview?.canPlay !== null && (
             <button style={styles.analyzeBtn(false)} onClick={runAnalysis}>
               <span style={styles.scanIcon}><IconScan /></span>
               Run Deepfake Analysis
@@ -460,15 +544,14 @@ export default function App() {
 
           {/* Progress */}
           {loading && (
-            <div style={{
-              borderRadius: 12, border: "1px solid rgba(16,185,129,0.2)",
-              background: "rgba(15,23,42,0.8)", marginTop: 20,
-            }}>
-              <div style={{ padding: "16px 24px 0", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ borderRadius:12, border:"1px solid rgba(16,185,129,0.2)", background:"rgba(15,23,42,0.8)", marginTop:20 }}>
+              <div style={{ padding:"16px 24px 0", display:"flex", alignItems:"center", gap:10 }}>
                 <div style={styles.spinner} />
-                <span style={{ fontSize: 13, color: "#10b981" }}>Analysing media...</span>
+                <span style={{ fontSize:13, color:"#10b981" }}>
+                  {isConverting ? "Converting & analysing video…" : "Analysing media…"}
+                </span>
               </div>
-              <ProgressSteps step={progressStep} />
+              <ProgressSteps step={progressStep} isConverting={isConverting} />
             </div>
           )}
 
@@ -477,7 +560,7 @@ export default function App() {
             <div style={styles.error}>
               <div style={styles.errorIcon}><IconWarning /></div>
               <div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>Analysis Failed</div>
+                <div style={{ fontWeight:600, marginBottom:4 }}>Analysis Failed</div>
                 {error}
               </div>
             </div>
@@ -486,9 +569,8 @@ export default function App() {
           {/* Result */}
           {result && (
             <div style={styles.result(fake)}>
-              {/* Header row */}
               <div style={styles.resultHeader(fake)}>
-                <div style={styles.resultLabel(fake)}>
+                <div style={{ display:"flex", alignItems:"center", gap:12 }}>
                   <div style={styles.resultIcon}>
                     <IconShield fill={fake ? "rgba(239,68,68,0.2)" : "rgba(16,185,129,0.2)"} />
                   </div>
@@ -507,22 +589,17 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Probability meter */}
               <div style={styles.meterWrap}>
-                <div style={styles.meterLabel}>
-                  <span>Authentic</span>
-                  <span>Fake</span>
-                </div>
+                <div style={styles.meterLabel}><span>Authentic</span><span>Fake</span></div>
                 <div style={styles.meterTrack}>
                   <div style={styles.meterFill(result.fake_probability, fake)} />
                 </div>
-                <div style={{ ...styles.meterLabel, marginTop: 6, marginBottom: 0 }}>
-                  <span style={{ color: "#10b981" }}>{result.authentic_probability}%</span>
-                  <span style={{ color: "#ef4444" }}>{result.fake_probability}%</span>
+                <div style={{ ...styles.meterLabel, marginTop:6, marginBottom:0 }}>
+                  <span style={{ color:"#10b981" }}>{result.authentic_probability}%</span>
+                  <span style={{ color:"#ef4444" }}>{result.fake_probability}%</span>
                 </div>
               </div>
 
-              {/* Stats grid */}
               <div className="stats-grid" style={styles.stats}>
                 {result.media_type === "video" ? (
                   <>
@@ -535,19 +612,17 @@ export default function App() {
                       <div style={styles.statKey}>Video duration</div>
                     </div>
                   </>
-                ) : (
-                  result.features && (
-                    <>
-                      <div style={styles.statCell}>
-                        <div style={styles.statVal}>{result.features.sharpness}</div>
-                        <div style={styles.statKey}>Sharpness score</div>
-                      </div>
-                      <div style={styles.statCell}>
-                        <div style={styles.statVal}>{result.features.noise_level}</div>
-                        <div style={styles.statKey}>Noise level</div>
-                      </div>
-                    </>
-                  )
+                ) : result.features && (
+                  <>
+                    <div style={styles.statCell}>
+                      <div style={styles.statVal}>{result.features.sharpness}</div>
+                      <div style={styles.statKey}>Sharpness score</div>
+                    </div>
+                    <div style={styles.statCell}>
+                      <div style={styles.statVal}>{result.features.noise_level}</div>
+                      <div style={styles.statKey}>Noise level</div>
+                    </div>
+                  </>
                 )}
                 <div style={styles.statCell}>
                   <div style={styles.statVal}>{result.processing_time_ms}ms</div>
@@ -559,21 +634,20 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Feature breakdown (image only) */}
               {result.features && (
                 <div style={styles.features}>
                   <div style={styles.featTitle}>Signal Breakdown</div>
                   <div className="feat-grid" style={styles.featGrid}>
                     {[
-                      { key: "sharpness", label: "Sharpness", max: 800, val: result.features.sharpness },
-                      { key: "noise_level", label: "Noise Level", max: 20, val: result.features.noise_level },
-                      { key: "color_variance", label: "Color Variance", max: 60, val: result.features.color_variance },
-                      { key: "frequency_artifacts", label: "Freq. Artifacts", max: 1000, val: result.features.frequency_artifacts },
+                      { label:"Sharpness", max:800, val:result.features.sharpness },
+                      { label:"Noise Level", max:20, val:result.features.noise_level },
+                      { label:"Color Variance", max:60, val:result.features.color_variance },
+                      { label:"Freq. Artifacts", max:1000, val:result.features.frequency_artifacts },
                     ].map(f => (
-                      <div key={f.key} style={styles.featRow}>
+                      <div key={f.label} style={styles.featRow}>
                         <span style={styles.featName}>{f.label}</span>
                         <span style={styles.featVal}>{f.val}</span>
-                        <div style={styles.featBar()}>
+                        <div style={styles.featBarTrack}>
                           <div style={styles.featBarFill((f.val / f.max) * 100)} />
                         </div>
                       </div>
@@ -582,21 +656,22 @@ export default function App() {
                 </div>
               )}
 
-              {/* Meta row */}
               <div style={styles.metaRow}>
                 <span>File: {result.filename}</span>
-                <span>Model: Heuristic v1 (replace with CNN)</span>
+                <span>ffmpeg: {result.ffmpeg_available ? "✓ available" : "✗ not found"}</span>
               </div>
             </div>
           )}
 
           {/* Disclaimer */}
-          <div style={{ marginTop: 40, padding: "16px 20px", borderRadius: 8, background: "rgba(15,23,42,0.6)", border: "1px solid rgba(71,85,105,0.2)" }}>
-            <p style={{ fontSize: 11, color: "#334155", lineHeight: 1.6 }}>
-              <span style={{ color: "#475569", fontWeight: 600 }}>ℹ Note: </span>
-              This demo uses heuristic image analysis. For production use, replace the backend model with a CNN trained on FaceForensics++ or DFDC (e.g. EfficientNet-B4 / XceptionNet). Results are indicative only.
+          <div style={{ marginTop:40, padding:"16px 20px", borderRadius:8, background:"rgba(15,23,42,0.6)", border:"1px solid rgba(71,85,105,0.2)" }}>
+            <p style={{ fontSize:11, color:"#334155", lineHeight:1.6 }}>
+              <span style={{ color:"#475569", fontWeight:600 }}>ℹ Note: </span>
+              This demo uses heuristic image analysis. Replace the backend model with a CNN (e.g. EfficientNet-B4 on FaceForensics++) for production use.
+              MP4 and WEBM play natively. AVI, MOV, MKV require ffmpeg installed on the server for conversion and preview.
             </p>
           </div>
+
         </div>
       </div>
     </>
